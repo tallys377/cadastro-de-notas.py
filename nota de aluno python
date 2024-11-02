@@ -1,0 +1,161 @@
+import sqlite3 as sql
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+# Funções de Banco de Dados
+def deletar_tabela():
+    with sql.connect("Alunos.db") as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("DROP TABLE IF EXISTS alunos")
+        conexao.commit()
+
+def criar_banco_e_tabela():
+    with sql.connect("Alunos.db") as conexao:
+        cursor = conexao.cursor()
+        comando_1 = """
+        CREATE TABLE IF NOT EXISTS alunos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            nota_av1 REAL,
+            nota_simulado1 REAL,
+            nota_simulado2 REAL,
+            situacao TEXT
+        )"""
+        cursor.execute(comando_1)
+        conexao.commit()
+
+def calcular_situacao(nota_av1, nota_simulado1, nota_simulado2):
+    soma = nota_av1 + nota_simulado1 + nota_simulado2
+    if soma >= 6.0:
+        return "Aprovado"
+    else:
+        return "Reprovado"
+
+def salvar_dados(nome, nota_av1, nota_simulado1, nota_simulado2):
+    situacao_final = calcular_situacao(nota_av1, nota_simulado1, nota_simulado2)
+    with sql.connect("Alunos.db") as conexao:
+        cursor = conexao.cursor()
+        comando = """
+        INSERT INTO alunos (nome, nota_av1, nota_simulado1, nota_simulado2, situacao)
+        VALUES (?, ?, ?, ?, ?)
+        """
+        cursor.execute(comando, (nome, nota_av1, nota_simulado1, nota_simulado2, situacao_final))
+        conexao.commit()
+    return situacao_final
+
+def carregar_dados():
+    with sql.connect("Alunos.db") as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT nome, nota_av1, nota_simulado1, nota_simulado2, situacao FROM alunos")
+        return cursor.fetchall()
+
+def atualizar_lista():
+    for item in tree.get_children():
+        tree.delete(item)
+    
+    for linha in carregar_dados():
+        total_notas = min(linha[1] + linha[2] + linha[3], 10)
+        tree.insert("", tk.END, values=(linha[0], linha[1], linha[2], linha[3], total_notas, linha[4]))
+
+def calcular_e_salvar():
+    try:
+        nome = entry_nome.get()
+        nota_av1 = float(entry_nota_av1.get())
+        nota_simulado1 = float(entry_nota_simulado1.get())
+        nota_simulado2 = float(entry_nota_simulado2.get())
+
+        if not (0 <= nota_av1 <= 10):
+            raise ValueError("A nota AV1 deve estar entre 0 e 10.")
+        if not (0.0 <= nota_simulado1 <= 1.0):
+            raise ValueError("A nota Simulado 1 deve estar entre 0.0 e 1.0.")
+        if not (0.0 <= nota_simulado2 <= 1.0):
+            raise ValueError("A nota Simulado 2 deve estar entre 0.0 e 1.0.")
+        
+        situacao_final = salvar_dados(nome, nota_av1, nota_simulado1, nota_simulado2)
+
+        label_resultado.config(text=f"Situação Final: {situacao_final}")
+        atualizar_lista()
+        messagebox.showinfo("Sucesso", "Dados salvos com sucesso!")
+    except ValueError as ve:
+        messagebox.showerror("Erro", str(ve))
+    except Exception as e:
+        messagebox.showerror("Erro", "Por favor, insira valores válidos para as notas.")
+
+def remover_aluno():
+    selected_item = tree.selection()
+    if not selected_item:
+        messagebox.showwarning("Aviso", "Selecione um aluno para remover.")
+        return
+    item = tree.item(selected_item)
+    nome = item['values'][0]
+    with sql.connect("Alunos.db") as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("DELETE FROM alunos WHERE nome = ?", (nome,))
+        conexao.commit()
+    atualizar_lista()
+    messagebox.showinfo("Sucesso", f"Aluno {nome} removido com sucesso.")
+
+# Configuração da Interface Tkinter
+deletar_tabela()
+criar_banco_e_tabela()
+root = tk.Tk()
+root.title("Gerenciamento de Alunos e Notas")
+
+# Frame de Menu
+frame_menu = tk.Frame(root)
+frame_menu.grid(row=0, column=0, padx=10, pady=10, sticky="n")
+
+# Botões de Funções
+btn_cadastrar = tk.Button(frame_menu, text="Cadastrar Aluno", command=lambda: abrir_cadastro())
+btn_cadastrar.grid(row=0, column=0, pady=5, sticky="w")
+
+btn_consultar = tk.Button(frame_menu, text="Consultar Alunos", command=atualizar_lista)
+btn_consultar.grid(row=1, column=0, pady=5, sticky="w")
+
+btn_remover = tk.Button(frame_menu, text="Remover Aluno", command=remover_aluno)
+btn_remover.grid(row=2, column=0, pady=5, sticky="w")
+
+# Frame de Cadastro de Alunos
+def abrir_cadastro():
+    cadastro_window = tk.Toplevel(root)
+    cadastro_window.title("Cadastro de Aluno")
+
+    tk.Label(cadastro_window, text="Nome:").grid(row=0, column=0, padx=10, pady=5)
+    global entry_nome
+    entry_nome = tk.Entry(cadastro_window)
+    entry_nome.grid(row=0, column=1, padx=10, pady=5)
+
+    tk.Label(cadastro_window, text="Nota AV1 (0-10):").grid(row=1, column=0, padx=10, pady=5)
+    global entry_nota_av1
+    entry_nota_av1 = tk.Entry(cadastro_window)
+    entry_nota_av1.grid(row=1, column=1, padx=10, pady=5)
+
+    tk.Label(cadastro_window, text="Nota Simulado 1 (0.0-1.0):").grid(row=2, column=0, padx=10, pady=5)
+    global entry_nota_simulado1
+    entry_nota_simulado1 = tk.Entry(cadastro_window)
+    entry_nota_simulado1.grid(row=2, column=1, padx=10, pady=5)
+
+    tk.Label(cadastro_window, text="Nota Simulado 2 (0.0-1.0):").grid(row=3, column=0, padx=10, pady=5)
+    global entry_nota_simulado2
+    entry_nota_simulado2 = tk.Entry(cadastro_window)
+    entry_nota_simulado2.grid(row=3, column=1, padx=10, pady=5)
+
+    btn_salvar = tk.Button(cadastro_window, text="Salvar e Calcular Situação", command=calcular_e_salvar)
+    btn_salvar.grid(row=4, columnspan=2, pady=10)
+
+    global label_resultado
+    label_resultado = tk.Label(cadastro_window, text="")
+    label_resultado.grid(row=5, columnspan=2, pady=5)
+
+# Frame de Visualização de Alunos
+frame_tree = tk.Frame(root)
+frame_tree.grid(row=0, column=1, padx=10, pady=10, sticky="n")
+
+cols = ("Nome", "Nota AV1", "Simulado 1", "Simulado 2", "Total de Notas", "Situação Final")
+tree = ttk.Treeview(frame_tree, columns=cols, show='headings')
+tree.pack()
+
+for col in cols:
+    tree.heading(col, text=col)
+
+root.mainloop()
